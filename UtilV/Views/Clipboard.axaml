@@ -1,0 +1,414 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:UtilV.ViewModels"
+        xmlns:models="using:UtilV.Models"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="420"
+        x:Class="UtilV.Views.Clipboard"
+        x:DataType="vm:ClipboardViewModel"
+        Title="UtilV"
+        Width="320" Height="420"
+        WindowStartupLocation="Manual"
+        WindowDecorations="None"
+        ShowInTaskbar="False"
+        Topmost="True"
+        RequestedThemeVariant="Dark"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+    <!-- Fixed dark: the popup is chrome, not a document, and should not flip with the
+         system theme. Soft greys rather than black, so it reads as a surface floating
+         above the desktop. -->
+    <Window.Resources>
+        <SolidColorBrush x:Key="Surface" Color="#2C2B33" />
+        <SolidColorBrush x:Key="SurfaceAlt" Color="#35343E" />
+        <SolidColorBrush x:Key="Line" Color="#45444F" />
+        <!-- Row outlines. Stronger than the panel dividers: they have to separate one
+             entry from the next across a list, not just mark the edge of a surface. -->
+        <SolidColorBrush x:Key="RowLine" Color="#57556A" />
+        <SolidColorBrush x:Key="RowLineHover" Color="#807EA0" />
+        <SolidColorBrush x:Key="TextPrimary" Color="#F1F0F5" />
+        <SolidColorBrush x:Key="TextSecondary" Color="#ABA9B6" />
+        <SolidColorBrush x:Key="RowHover" Color="#3D3C47" />
+        <!-- The brand indigo only manages 3.1:1 against this grey, so glyphs use a
+             lightened version of the same hue. -->
+        <SolidColorBrush x:Key="AccentGlyph" Color="#A5B4FC" />
+        <SolidColorBrush x:Key="PinGlyph" Color="#22D3EE" />
+
+        <!-- Drawn rather than emoji, which render from a colour font with their own metrics
+             and sit off-centre next to the gear and close glyphs. -->
+        <StreamGeometry x:Key="TrashIcon">
+            M2.6,4 H11.4
+            M5.6,4 V2.9 C5.6,2.4 6,2 6.5,2 H7.5 C8,2 8.4,2.4 8.4,2.9 V4
+            M3.9,4 L4.5,12 C4.55,12.6 5,13 5.6,13 H8.4 C9,13 9.45,12.6 9.5,12 L10.1,4
+            M6.3,6.3 V10.7
+            M7.7,6.3 V10.7
+        </StreamGeometry>
+        <StreamGeometry x:Key="PinIcon">
+            M4,1.5 H8 M5.4,1.5 V5.4 M6.6,1.5 V5.4
+            M3.4,5.4 H8.6 M6,5.4 V10.5
+        </StreamGeometry>
+    </Window.Resources>
+
+    <Window.Styles>
+        <Style Selector="Path.icon">
+            <Setter Property="Stretch" Value="None" />
+            <Setter Property="StrokeThickness" Value="1.1" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+        </Style>
+
+        <Style Selector="Button.icon">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowHover}" />
+        </Style>
+        <!-- Set on the Button rather than the presenter's TextElement, so a Path icon
+             picks up the same colour as the glyph icons. -->
+        <Style Selector="Button.icon:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="Button.icon.active">
+            <Setter Property="Foreground" Value="{DynamicResource AccentGlyph}" />
+        </Style>
+        <Style Selector="Button.icon:disabled">
+            <Setter Property="Opacity" Value="0.3" />
+        </Style>
+
+        <Style Selector="Button.action">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.action:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowHover}" />
+        </Style>
+
+        <!-- Each entry is drawn as its own card. Without an outline, a multi-line snippet
+             and two short entries look alike, and an image thumbnail has no visible extent
+             at all.
+
+             Set on the item rather than on the template's ContentPresenter: Fluent binds
+             the presenter's border from the control, and a template binding outranks a
+             style setter aimed at the presenter itself. -->
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="9,7" />
+            <!-- Spacing between rows only. The inset from the popup edges is the ListBox
+                 padding, so all four edges come from one number. -->
+            <Setter Property="Margin" Value="0,0,0,5" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RowLine}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="ListBoxItem:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource RowLineHover}" />
+        </Style>
+        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowHover}" />
+        </Style>
+        <!-- No selection chrome. Clicking a row acts immediately and closes the popup, so
+             a highlight could only ever describe a stale choice. Fluent's own selected
+             styling is overridden rather than merely unset. -->
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowHover}" />
+        </Style>
+        <!-- Fluent styles these two selected sub-states separately, and a more specific
+             selector wins, so both have to be overridden as well. -->
+        <Style Selector="ListBoxItem:selected:not(:focus) /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="ListBoxItem:selected:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowHover}" />
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+
+        <!-- Row controls belong to the row under the pointer, not to every row at once. -->
+        <Style Selector="ListBoxItem Button.rowAction">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="ListBoxItem:pointerover Button.rowAction">
+            <Setter Property="Opacity" Value="1" />
+            <Setter Property="IsHitTestVisible" Value="True" />
+        </Style>
+
+        <Style Selector="TextBox.number">
+            <!-- Six digits is well past both limits and keeps any value inside an int. -->
+            <Setter Property="MaxLength" Value="6" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="9,6" />
+            <Setter Property="Width" Value="96" />
+            <Setter Property="HorizontalContentAlignment" Value="Right" />
+        </Style>
+        <Style Selector="TextBox.number:focus">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentGlyph}" />
+        </Style>
+
+        <Style Selector="TextBox.path">
+            <Setter Property="Background" Value="{DynamicResource SurfaceAlt}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Line}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="FontFamily" Value="DejaVu Sans Mono,monospace" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <Style Selector="TextBlock.sectionHeading">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </Window.Styles>
+
+    <Border Background="{DynamicResource Surface}"
+            BorderBrush="{DynamicResource Line}"
+            BorderThickness="1"
+            CornerRadius="10"
+            ClipToBounds="True">
+        <DockPanel>
+            <Border DockPanel.Dock="Top"
+                    Background="{DynamicResource SurfaceAlt}"
+                    BorderBrush="{DynamicResource Line}"
+                    BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="13,0,5,0" Height="38">
+                    <TextBlock Grid.Column="0"
+                               VerticalAlignment="Center"
+                               FontWeight="SemiBold"
+                               FontSize="12.5"
+                               Foreground="{DynamicResource TextPrimary}"
+                               Text="{Binding PaneTitle}" />
+
+                    <!-- Only meaningful on the history pane, and only with something to
+                         clear. -->
+                    <Button Grid.Column="1"
+                            Classes="icon"
+                            ToolTip.Tip="Clear history"
+                            IsVisible="{Binding !IsSettingsOpen}"
+                            IsEnabled="{Binding !IsEmpty}"
+                            Command="{Binding ClearHistoryCommand}">
+                        <Path Classes="icon"
+                              Width="14" Height="14"
+                              Stroke="{Binding $parent[Button].Foreground}"
+                              Data="{StaticResource TrashIcon}" />
+                    </Button>
+
+                    <Button Grid.Column="2"
+                            Classes="icon"
+                            Classes.active="{Binding IsSettingsOpen}"
+                            Content="⚙"
+                            ToolTip.Tip="Settings"
+                            Command="{Binding ToggleSettingsCommand}" />
+
+                    <Button Grid.Column="3"
+                            Classes="icon"
+                            Content="✕"
+                            ToolTip.Tip="Close"
+                            Click="OnCloseClicked" />
+                </Grid>
+            </Border>
+
+            <Border DockPanel.Dock="Bottom"
+                    Background="{DynamicResource SurfaceAlt}"
+                    BorderBrush="{DynamicResource Line}"
+                    BorderThickness="0,1,0,0">
+                <TextBlock Margin="13,7"
+                           FontSize="11"
+                           Foreground="{DynamicResource TextSecondary}"
+                           Text="Click an entry to paste it. Esc to close."
+                           IsVisible="{Binding !IsSettingsOpen}" />
+            </Border>
+
+            <Panel>
+                <Panel IsVisible="{Binding !IsSettingsOpen}">
+                    <StackPanel HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Spacing="4"
+                                IsVisible="{Binding IsEmpty}">
+                        <TextBlock Text="Nothing copied yet"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="Copy something and it will appear here"
+                                   Classes="hint"
+                                   HorizontalAlignment="Center" />
+                    </StackPanel>
+
+                    <ListBox x:Name="EntryList"
+                             ItemsSource="{Binding Entries}"
+                             Tapped="OnEntryTapped"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="6"
+                             IsVisible="{Binding !IsEmpty}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="models:ClipEntry">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                    <Path Grid.Column="0"
+                                          Classes="icon"
+                                          Width="12" Height="12"
+                                          Margin="0,0,7,0"
+                                          VerticalAlignment="Center"
+                                          Stroke="{DynamicResource PinGlyph}"
+                                          IsVisible="{Binding IsPinned}"
+                                          Data="{StaticResource PinIcon}" />
+
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding Preview}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center"
+                                               IsVisible="{Binding !HasThumbnail}" />
+
+                                    <Border Grid.Column="1"
+                                            IsVisible="{Binding HasThumbnail}"
+                                            CornerRadius="4"
+                                            ClipToBounds="True"
+                                            HorizontalAlignment="Left">
+                                        <Image Source="{Binding Thumbnail}"
+                                               MaxHeight="64"
+                                               Stretch="Uniform"
+                                               StretchDirection="DownOnly" />
+                                    </Border>
+
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="1">
+                                        <Button Classes="icon rowAction"
+                                                ToolTip.Tip="Pin / unpin"
+                                                Tapped="OnRowPinTapped">
+                                            <Path Classes="icon"
+                                                  Width="12" Height="12"
+                                                  Stroke="{Binding $parent[Button].Foreground}"
+                                                  Data="{StaticResource PinIcon}" />
+                                        </Button>
+                                        <Button Classes="icon rowAction"
+                                                Content="✕"
+                                                FontSize="11"
+                                                ToolTip.Tip="Remove"
+                                                Tapped="OnRowDeleteTapped" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Panel>
+
+                <ScrollViewer x:Name="SettingsScroll" IsVisible="{Binding IsSettingsOpen}">
+                    <StackPanel Margin="13,12" Spacing="15">
+                        <StackPanel>
+                            <TextBlock Classes="sectionHeading" Text="KEYBOARD SHORTCUT" />
+                            <TextBlock Classes="hint"
+                                       Text="Alt+V is registered automatically. If another program already holds it, bind this command in your desktop's keyboard settings instead." />
+                            <Border Margin="0,8,0,0"
+                                    Background="{DynamicResource SurfaceAlt}"
+                                    BorderBrush="{DynamicResource Line}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="9,7">
+                                <SelectableTextBlock Text="{Binding ToggleCommandLine}"
+                                                     FontFamily="DejaVu Sans Mono,monospace"
+                                                     FontSize="11"
+                                                     TextWrapping="Wrap"
+                                                     Foreground="{DynamicResource TextPrimary}" />
+                            </Border>
+                            <Button Classes="action"
+                                    Margin="0,8,0,0"
+                                    Content="Copy command"
+                                    Command="{Binding CopyToggleCommandCommand}" />
+
+                            <TextBlock Classes="hint"
+                                       Margin="0,8,0,0"
+                                       FontSize="10.5"
+                                       IsVisible="{Binding !IsInstalledOnPath}"
+                                       Text="Running from a build directory. Once installed on your PATH this becomes simply: utilv --toggle" />
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Classes="sectionHeading" Text="LIMITS" />
+
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" RowSpacing="8">
+                                <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="History entries kept"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="12" />
+                                    <TextBlock Text="{Binding HistoryRangeHint}"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               FontSize="10.5" />
+                                </StackPanel>
+                                <!-- Committed on blur, not per keystroke: clamping as you
+                                     type makes an out-of-range prefix like "1" of "15"
+                                     snap to the minimum and become untypeable. -->
+                                <TextBox Grid.Row="0" Grid.Column="1"
+                                         x:Name="HistoryLimitBox"
+                                         Classes="number"
+                                         TextChanged="OnNumberTextChanged"
+                                         LostFocus="OnNumberLostFocus"
+                                         Text="{Binding MaxHistoryEntries, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+
+                                <StackPanel Grid.Row="1" Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="Max entry size"
+                                               Foreground="{DynamicResource TextPrimary}"
+                                               FontSize="12" />
+                                    <TextBlock Text="{Binding PayloadRangeHint}"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               FontSize="10.5" />
+                                </StackPanel>
+                                <TextBox Grid.Row="1" Grid.Column="1"
+                                         x:Name="PayloadLimitBox"
+                                         Classes="number"
+                                         TextChanged="OnNumberTextChanged"
+                                         LostFocus="OnNumberLostFocus"
+                                         Text="{Binding MaxPayloadMegabytes, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel>
+                            <TextBlock Classes="sectionHeading" Text="SETTINGS FILE" />
+                            <!-- Read-only rather than a label: a TextBox is the only control
+                                 that gives select-all and Ctrl+C for free. -->
+                            <TextBox Classes="path"
+                                     IsReadOnly="True"
+                                     TextWrapping="Wrap"
+                                     Text="{Binding SettingsPath}" />
+                        </StackPanel>
+
+                        <TextBlock Classes="hint"
+                                   FontSize="10.5"
+                                   HorizontalAlignment="Center"
+                                   Text="{Binding Version, StringFormat='UtilV {0}'}" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Panel>
+        </DockPanel>
+    </Border>
+</Window>

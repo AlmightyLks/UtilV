@@ -1,0 +1,15 @@
+# Build output
+bin/
+obj/
+
+# IDE
+.idea/
+*.user
+*.DotSettings.user
+
+# Runtime artefacts
+*.log
+
+assets/
+# Release artefacts
+dist/

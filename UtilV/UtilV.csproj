@@ -1,0 +1,48 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <!-- Lowercase: this is the command users type and bind to a key. -->
+        <AssemblyName>utilv</AssemblyName>
+        <RootNamespace>UtilV</RootNamespace>
+        <Version>1.0.0</Version>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ApplicationManifest>app.manifest</ApplicationManifest>
+        <PublishAot>true</PublishAot>
+        <IsAotCompatible>true</IsAotCompatible>
+        <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="UtilV.Tests"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <AvaloniaResource Include="Assets\**"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(MSBuildProjectDirectory)/../install.sh;$(MSBuildProjectDirectory)/../uninstall.sh">
+            <Link>%(Filename)%(Extension)</Link>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+        </None>
+    </ItemGroup>
+
+    <Target Name="MakeScriptsExecutable" AfterTargets="Publish" Condition="'$(OS)' != 'Windows_NT'">
+        <Exec Command="chmod +x &quot;$(PublishDir)install.sh&quot; &quot;$(PublishDir)uninstall.sh&quot;"
+              Condition="Exists('$(PublishDir)install.sh')"/>
+    </Target>
+
+    <ItemGroup>
+        <PackageReference Include="Avalonia" Version="12.1.2"/>
+        <PackageReference Include="Avalonia.Desktop" Version="12.1.2"/>
+        <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2"/>
+        <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2"/>
+        <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+            <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+            <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2"/>
+    </ItemGroup>
+</Project>

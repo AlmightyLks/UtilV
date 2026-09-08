@@ -1,0 +1,11 @@
+<!-- Dark, not Default: the popup is the only window and is always dark, and Fluent would
+     otherwise draw its control chrome from the light palette. -->
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="UtilV.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Styles>
+        <FluentTheme />
+    </Application.Styles>
+</Application>
